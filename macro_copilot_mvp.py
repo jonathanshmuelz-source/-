@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 import json, os, re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -220,7 +221,16 @@ def poll_and_notify(app: Application) -> None:
 
     _save_json(PROCESSED_FILE, list(processed))
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def whats_up(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    text = "הגעת לשחק או לעשות כסף? תרשם להתראות!\n\nשלח /subscribe כדי לקבל התראות מאקרו."
+    await context.bot.send_message(chat_id=chat_id, text=text)
+
+ 
+    chat_id = update.effective_chat.id
+    text = "הגעת לשחק או לעשות כסף? תרשם להתראות!\n\nשלח /subscribe כדי לקבל התראות מאקרו."
+    await context.bot.send_message(chat_id=chat_id, text=text)
+
     chat_id = update.effective_chat.id
     text = (
         "שלום! אני בוט ניתוח מאקרו (ללא הוראות מסחר).\n"
@@ -268,12 +278,18 @@ async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(chat_id=update.effective_chat.id, text="pong")
 
 def main() -> None:
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("subscribe", subscribe))
-    application.add_handler(CommandHandler("unsubscribe", unsubscribe))
-    application.add_handler(CommandHandler("status", status))
-    application.add_handler(CommandHandler("ping", ping))
+  application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+
+# טריגר לטקסט "מה נשמע?"
+application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^\s*מה\s+נשמע\??\s*$"), whats_up))
+
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("subscribe", subscribe))
+application.add_handler(CommandHandler("unsubscribe", unsubscribe))
+application.add_handler(CommandHandler("status", status))
+# הורדנו את /ping:
+# application.add_handler(CommandHandler("ping", ping))
+
 
     scheduler = BackgroundScheduler(timezone=timezone.utc)
     scheduler.add_job(
