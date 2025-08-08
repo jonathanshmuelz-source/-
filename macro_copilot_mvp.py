@@ -288,7 +288,7 @@ def main() -> None:
 
     print("Bot started. Press Ctrl+C to stop.")
     try:
-        application.run_polling(close_loop=False)
+        application.run_polling(close_loop=False, stop_signals=None)
     finally:
         scheduler.shutdown(wait=False)
 
