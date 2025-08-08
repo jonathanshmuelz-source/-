@@ -1,4 +1,3 @@
-# server.py — תיקון להפעלת הבוט בת׳רד עם לולאת asyncio נכונה
 import threading, asyncio
 from fastapi import FastAPI
 from macro_copilot_mvp import main as run_bot
@@ -7,7 +6,6 @@ app = FastAPI()
 _started = False
 
 def _start_bot():
-    # לולאת asyncio נפרדת לת׳רד שמריץ את הבוט
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     run_bot()
@@ -27,4 +25,5 @@ def root():
 @app.get("/health")
 def health():
     return {"ok": True}
+
 
