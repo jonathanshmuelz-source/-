@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json, os, re, time
+import json, os, re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -10,12 +10,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.error import Conflict
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-# -------------------------
-# Config & constants
-# -------------------------
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TE_CLIENT = os.getenv("TE_CLIENT", "guest:guest")
@@ -31,9 +27,6 @@ WINDOW_MINUTES = 6
 if not TELEGRAM_BOT_TOKEN:
     raise SystemExit("Missing TELEGRAM_BOT_TOKEN (set it in Render → Environment).")
 
-# -------------------------
-# Data structures
-# -------------------------
 @dataclass
 class MacroEvent:
     id_key: str
@@ -49,9 +42,6 @@ class MacroEvent:
     source: Optional[str]
     source_url: Optional[str]
 
-# -------------------------
-# Utilities: JSON store
-# -------------------------
 def _load_json(path: str, default: Any) -> Any:
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -65,9 +55,6 @@ def _save_json(path: str, obj: Any) -> None:
         json.dump(obj, f, ensure_ascii=False, indent=2, default=str)
     os.replace(tmp, path)
 
-# -------------------------
-# Provider: TradingEconomics
-# -------------------------
 class TradingEconomicsProvider:
     BASE = "https://api.tradingeconomics.com"
 
@@ -82,7 +69,7 @@ class TradingEconomicsProvider:
             "c": self.client,
         }
         if high_impact_only:
-            params["importance"] = 3  # high
+            params["importance"] = 3
         r = requests.get(f"{self.BASE}/calendar", params=params, timeout=20)
         r.raise_for_status()
         data = r.json()
@@ -201,9 +188,6 @@ def interpret_event(ev: MacroEvent) -> Dict[str, Any]:
 
     return {"direction": direction, "score": score, "summary": summary, "details": details, "tags": tags}
 
-# -------------------------
-# Scheduler & dispatch
-# -------------------------
 provider = TradingEconomicsProvider(TE_CLIENT)
 
 def poll_and_notify(app: Application) -> None:
@@ -236,20 +220,16 @@ def poll_and_notify(app: Application) -> None:
 
     _save_json(PROCESSED_FILE, list(processed))
 
-# -------------------------
-# Commands & triggers
-# -------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     text = (
         "שלום! אני בוט ניתוח מאקרו (ללא הוראות מסחר).\n"
         "אקפיץ לך פרשנות כשמתפרסם נתון חשוב (US, high-impact).\n\n"
         "פקודות:\n"
-        "/subscribe – קבלת עדכונים\n"
-        "/unsubscribe – הפסקת עדכונים\n"
+        "/מנוי – קבלת עדכונים (alias: /subscribe)\n"
+        "/בטל_מנוי – הפסקת עדכונים (alias: /unsubscribe)\n"
+        "/מה_נשמע – אומר משהו חמוד (alias: /ping)\n"
         "/status – מצב נוכחי\n"
-        # "/ping – בדיקה מהירה\n"
-        "\nאפשר גם לשלוח: מה נשמע?"
     )
     await context.bot.send_message(chat_id=chat_id, text=text)
 
@@ -284,30 +264,24 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     await context.bot.send_message(chat_id=chat_id, text=msg)
 
-# אופציה ישנה /ping אם תרצה להשאיר – לא נחבר אותה
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(chat_id=update.effective_chat.id, text="pong")
 
-# "מה נשמע?" בעברית
-async def whats_up(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = update.effective_chat.id
-    text = "הגעת לשחק או לעשות כסף? תרשם להתראות!\n\nשלח /subscribe כדי לקבל התראות מאקרו."
-    await context.bot.send_message(chat_id=chat_id, text=text)
+async def whatsup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Responds to /מה_נשמע
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="לא עניינך!")
 
-# -------------------------
-# Main
-# -------------------------
 def main() -> None:
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-
-    # טריגר לטקסט "מה נשמע?" (עם/בלי סימן שאלה ורווחים)
-    application.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^\s*מה\s+נשמע\??\s*$"), whats_up))
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("subscribe", subscribe))
     application.add_handler(CommandHandler("unsubscribe", unsubscribe))
     application.add_handler(CommandHandler("status", status))
-    # application.add_handler(CommandHandler("ping", ping))  # אם תרצה להחזיר—בטל הערה
+    application.add_handler(CommandHandler("ping", ping))
+    # Hebrew command aliases:
+    application.add_handler(CommandHandler("מנוי", subscribe))
+    application.add_handler(CommandHandler("בטל_מנוי", unsubscribe))
+    application.add_handler(CommandHandler("מה_נשמע", whatsup))
 
     scheduler = BackgroundScheduler(timezone=timezone.utc)
     scheduler.add_job(
@@ -322,18 +296,7 @@ def main() -> None:
 
     print("Bot started. Press Ctrl+C to stop.")
     try:
-        while True:
-            try:
-                application.run_polling(
-                    close_loop=False,
-                    stop_signals=None,        # חשוב: לא לרשום signal handlers בת׳רד
-                    drop_pending_updates=True # לא למשוך תור ישן
-                )
-                break
-            except Conflict:
-                print("[warn] Conflict: another polling is active. retrying in 5s...")
-                time.sleep(5)
-                continue
+        application.run_polling(close_loop=False)
     finally:
         scheduler.shutdown(wait=False)
 
